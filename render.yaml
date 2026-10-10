@@ -1,0 +1,5 @@
+services:
+  - type: web
+    name: rope-machine-3d
+    runtime: static
+    staticPublishPath: .

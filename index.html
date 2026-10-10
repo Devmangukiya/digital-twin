@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MTR Rope Making Machine – Live 3D Process</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0c1210;--panel:#131c19;--line:#27372f;--tx:#e9f1ee;--mut:#8aa296;--amb:#f08a3c;--teal:#1fb99a;--bad:#ef5b4c;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--tx);font-family:'IBM Plex Sans',system-ui,sans-serif;overflow:hidden}
+#c{position:absolute;inset:0;width:100%;height:100%;cursor:grab;touch-action:none}
+h1{font:700 clamp(32px,5.5vw,58px)/.95 'Barlow Condensed',Impact,sans-serif;margin:0}
+.hd{position:absolute;left:22px;top:18px;max-width:360px;pointer-events:none}.hd p{color:var(--mut);margin:8px 0 0;font-size:14px}
+.tag{position:absolute;transform:translate(-50%,-100%);background:rgba(12,18,16,.85);border:1px solid var(--line);padding:4px 9px;font-size:12px;white-space:nowrap;pointer-events:none;border-radius:3px}
+.tag.on{border-color:var(--teal);color:var(--teal)}.tag.bad{border-color:var(--bad);color:var(--bad)}
+.side{position:absolute;right:16px;top:16px;width:300px;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:16px;max-height:calc(100% - 32px);overflow:auto}
+.side h2{font:700 30px 'Barlow Condensed',sans-serif;color:var(--amb);margin:0}small{color:var(--mut)}
+.st{font:700 24px 'Barlow Condensed',sans-serif;margin:10px 0 6px}
+.bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden}.bar i{display:block;height:100%;width:0;background:var(--teal)}
+.kv{display:grid;grid-template-columns:1fr auto;gap:6px 10px;margin-top:12px;font-size:13px}.kv span{color:var(--mut)}
+.ctl{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}.ctl label{font-size:12px;color:var(--mut);display:grid;gap:4px}
+select,button,input{font:500 13px 'IBM Plex Sans',sans-serif;background:#1a2723;color:var(--tx);border:1px solid var(--line);padding:8px;border-radius:4px}
+input[type=range]{padding:0;width:100%;accent-color:var(--teal)}button{cursor:pointer}button:hover{border-color:var(--amb)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--amb);outline-offset:2px}
+button.p{background:var(--amb);color:#1c0e03;border-color:var(--amb);font-weight:700}.full{grid-column:1/-1}
+.kpi{position:absolute;left:16px;bottom:16px;display:flex;gap:10px;flex-wrap:wrap;max-width:calc(100% - 340px)}
+.kpi div{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px 14px;min-width:115px}
+.kpi b{display:block;font:700 28px 'Barlow Condensed',sans-serif}.kpi span{color:var(--mut);font-size:12px}
+@media(max-width:760px){.side{width:auto;left:12px;right:12px;top:auto;bottom:12px;padding:10px 12px}.side .kv,.side small{display:none}.kpi,.hd p{display:none}.ctl{margin-top:8px}}
+</style></head><body>
+<canvas id="c" aria-label="3D view of rope making machine"></canvas>
+<div class="hd"><h1>From yarn to rope, live.</h1><p>Maruti MTR rope making machine. Drag to orbit, scroll to zoom. Demo values only.</p></div>
+<div id="tags"></div>
+<aside class="side">
+<small>Take-up package</small><h2 id="pk">P-0001</h2>
+<div class="st" id="state">Running</div><div class="bar"><i id="prog"></i></div>
+<div class="kv"><span>Stage</span><b id="stn">Strand flyer</b><span>Strand flyer</span><b id="r1">0 RPM</b><span>Rope flyer</span><b id="r2">0 RPM</b><span>Twist per metre</span><b id="tpm">0</b><span>Motor</span><b id="kw">0 kW</b><span>Rope lay</span><b>Z</b></div>
+<div class="ctl">
+<label>Model<select id="mdl"><option value="26">MTR/26 (2–6 mm)</option><option value="25">MTR/25 (2–5 mm)</option></select></label>
+<label>Rope size<select id="sz"><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option></select></label>
+<label class="full">Speed <span id="sv">100%</span><input id="sp" type="range" min="20" max="100" value="100"></label>
+<button class="p" id="brk">Break a strand</button><button id="stop">Pause</button></div>
+</aside>
+<div class="kpi"><div><b id="k1">0</b><span>Output kg/h</span></div><div><b id="k2">0</b><span>Rope made, m</span></div><div><b id="k3">0</b><span>Packages full</span></div><div><b id="k4">0</b><span>Strand breaks</span></div></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const D={2:[3.7,92,1300,2.06],3:[8.8,88,1300,4.06],4:[16.6,69.5,1250,7.3],5:[30.28,55.3,1100,11.4],6:[40.6,46.3,1000,16.4]};// kg/h, TPM, RPM, g/m
+const R=new THREE.WebGLRenderer({canvas:c,antialias:true});R.setPixelRatio(Math.min(devicePixelRatio,2));R.shadowMap.enabled=true;
+const S=new THREE.Scene();S.background=new THREE.Color(0x0c1210);S.fog=new THREE.Fog(0x0c1210,30,65);
+const cam=new THREE.PerspectiveCamera(40,1,.1,100);
+S.add(new THREE.HemisphereLight(0xaad0c4,0x101816,.9));
+const sun=new THREE.DirectionalLight(0xffffff,.9);sun.position.set(6,14,9);sun.castShadow=true;Object.assign(sun.shadow.camera,{left:-16,right:16,top:10,bottom:-10});S.add(sun);
+const M=(c,m=.5,r=.5)=>new THREE.MeshStandardMaterial({color:c,metalness:m,roughness:r});
+const steel=M(0x8a9aa3,.8,.35),blk=M(0x1a1f1e,.6,.55),orange=M(0xf08a3c,.3,.5),teal=M(0x1fb99a,0,.8),tealS=M(0x1fb99a,0,.7);
+function add(g,m,x,y,z,p=S){const o=new THREE.Mesh(g,m);o.position.set(x,y,z);o.castShadow=o.receiveShadow=true;p.add(o);return o}
+add(new THREE.BoxGeometry(32,.4,12),M(0x131a18,.2,.85),0,-.2,0);const gr=new THREE.GridHelper(32,32,0x27372f,0x1a2521);gr.position.y=.01;S.add(gr);
+add(new THREE.BoxGeometry(27,.5,3),blk,0,.25,0);// machine bed
+function spool(g,r,w,col,x,y,z,ax){const s=new THREE.Group();s.position.set(x,y,z);g.add(s);
+ add(new THREE.CylinderGeometry(r,r,w,24),col,0,0,0,s);[-1,1].forEach(k=>add(new THREE.CylinderGeometry(r*1.35,r*1.35,.08,24),steel,0,k*w/2,0,s));return s}
+// creel: 2 tiers x 4 yarn bobbins
+add(new THREE.BoxGeometry(5.5,.2,3),blk,-11,1.9,0);add(new THREE.BoxGeometry(5.5,.2,3),blk,-11,3.5,0);
+[-13.2,-8.8].forEach(x=>[-1.4,1.4].forEach(z=>add(new THREE.BoxGeometry(.2,4,.2),blk,x,2,z)));
+const cree=[];[1.9,3.5].forEach(y=>[0,1,2,3].forEach(i=>{const g=new THREE.Group();S.add(g);const s=spool(g,.38,.9,teal,-12.4+i*1.65,y+.65,.6);cree.push(s)}));
+// strand flyer
+function flyer(x,r,len){const f=new THREE.Group();f.position.set(x,1.7,0);S.add(f);
+ [-len/2,len/2].forEach(k=>{const d=add(new THREE.CylinderGeometry(r*.35,r*.35,.15,20),steel,k,0,0,f);d.rotation.z=Math.PI/2});
+ [1,-1].forEach(k=>add(new THREE.BoxGeometry(len,.14,.22),orange,0,k*r,0,f));return f}
+add(new THREE.BoxGeometry(2.2,1.4,3),blk,-6,.9,0);const f1=flyer(-6,1.2,2.6);
+// strand packages (ply 3)
+add(new THREE.BoxGeometry(3.4,1,3.4),blk,-2.2,.8,0);
+const sp=[];for(let i=0;i<3;i++){const g=new THREE.Group();g.position.set(-2.2,1.2+i*.0,0);S.add(g);const s=spool(g,.38,.9,teal,(i-1)*1,.6,0);s.rotation.z=Math.PI/2;sp.push(s);s.position.set(0+(i-1)*1.0,.55,0)}
+add(new THREE.BoxGeometry(3.2,1.2,3.4),blk,2.2,.85,0);const f2=flyer(2.2,1.5,3);
+// take-up
+add(new THREE.BoxGeometry(3.6,1.2,3.4),blk,8,.85,0);
+const tk=new THREE.Group();tk.position.set(8,2.3,0);S.add(tk);
+const tkb=add(new THREE.CylinderGeometry(.5,.5,2,28),steel,0,0,0,tk);tkb.rotation.x=Math.PI/2;
+[-1,1].forEach(k=>{const d=add(new THREE.CylinderGeometry(1.5,1.5,.12,32),steel,0,0,k*1.05,tk);d.rotation.x=Math.PI/2});
+const fill=add(new THREE.CylinderGeometry(.5,.5,1.9,32),tealS,0,0,0,tk);fill.rotation.x=Math.PI/2;
+// yarn lines creel -> strand flyer, strand -> package, strands -> rope flyer -> rope
+const lines=[];function line(pts,col,r=.03){const m=new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map(p=>new THREE.Vector3(...p))),24,r,6),new THREE.MeshStandardMaterial({color:col,roughness:.8}));S.add(m);lines.push(m);return m}
+cree.forEach((s,i)=>line([[s.position.x,s.position.y,.6],[-9,2.6,.4],[-7.3,1.8,0]],0x1fb99a));
+line([[-4.7,1.7,0],[-3.4,1.5,0],[-2.7,1.8,0]],0x1fb99a,.05);
+const strands=[0,1,2].map(i=>line([[-2.2+(i-1),1.6,0],[-.5,1.9,(i-1)*.4],[.7,1.8,0]],0x1fb99a,.05));
+const rope=new THREE.Group();S.add(rope);
+function build(sz){while(rope.children.length)rope.remove(rope.children[0]);const rr=.045+sz*.012;
+ for(let k=0;k<3;k++){const p=[];for(let i=0;i<=140;i++){const t=i/140,x=3.7+t*3.5,a=-t*3.5*2.4+k*Math.PI*2/3;p.push(new THREE.Vector3(x,1.7+Math.sin(a)*rr,Math.cos(a)*rr))}
+ const m=new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(p),280,rr*.95,6),tealS);m.castShadow=true;rope.add(m)}}
+const eye=add(new THREE.SphereGeometry(.2,14,10),new THREE.MeshBasicMaterial({color:0x1fb99a}),5.6,3.1,0);add(new THREE.BoxGeometry(.2,1.4,.2),blk,5.6,2.4,-1.3);
+const lamp=add(new THREE.SphereGeometry(.15,12,10),new THREE.MeshBasicMaterial({color:0x1fb99a}),-6,2.8,0);
+// motor
+add(new THREE.CylinderGeometry(.6,.6,1.5,20),M(0x2a6f8a,.5,.4),-4,.9,2.1).rotation.z=Math.PI/2;
+const st=[['Yarn creel',-11,4.7],['Strand flyer',-6,3.7],['Strand packages',-2.2,2.7],['Rope flyer',2.2,3.7],['Take-up package',8,4.5]];
+st.forEach(s=>{s.e=document.createElement('div');s.e.className='tag';s.e.textContent=s[0];tags.appendChild(s.e)});
+let th=-.5,ph=.95,rd=27,tth=th,tph=ph,trd=rd,dr=0,lx,ly;
+c.onpointerdown=e=>{dr=1;lx=e.clientX;ly=e.clientY;c.setPointerCapture(e.pointerId)};c.onpointerup=()=>dr=0;
+c.onpointermove=e=>{if(!dr)return;tth-=(e.clientX-lx)*.006;tph=Math.max(.35,Math.min(1.4,tph-(e.clientY-ly)*.006));lx=e.clientX;ly=e.clientY};
+c.onwheel=e=>{e.preventDefault();trd=Math.max(10,Math.min(40,trd+e.deltaY*.02))};
+function size(){R.setSize(innerWidth,innerHeight,false);cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix()}addEventListener('resize',size);size();
+const $=id=>document.getElementById(id),reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+let run=true,brkOn=false,model=26,size_=4,pct=1,k=0,rpm=0,mtr=0,kg=0,pk=1,full=0,breaks=0,last=performance.now(),acc=0,tick_=0;
+build(4);
+mdl.onchange=()=>{model=+mdl.value;if(model==25&&+sz.value==6)sz.value=5;size_=+sz.value;build(size_)};
+sz.onchange=()=>{size_=+sz.value;if(model==25&&size_==6){size_=5;sz.value=5}build(size_)};
+$('sp').oninput=e=>{pct=e.target.value/100;$('sv').textContent=e.target.value+'%'};
+$('stop').onclick=()=>{run=!run;$('stop').textContent=run?'Pause':'Resume'};
+document.getElementById('brk').onclick=()=>{brkOn=!brkOn;$('brk').textContent=brkOn?'Reset strand':'Break a strand'}
+const tc=new THREE.Vector3();
+function loop(now){requestAnimationFrame(loop);const dt=Math.min((now-last)/1000,.05);last=now;
+ const [kgh,tpm,rmax]=D[size_],cap=model==26?12.5:8,rate=(run&&!brkOn)?pct:0;
+ rpm+=(rate*rmax-rpm)*Math.min(1,dt*2);const f=rpm/rmax;const mpm=rpm/tpm,gpm=D[size_][3];
+ const dA=reduce?0:f*14*dt;f1.rotation.x+=dA*2;f2.rotation.x+=dA;rope.rotation.x+=dA*.0;
+ cree.forEach(s=>s.rotation.y+=dA*.6);sp.forEach(s=>s.rotation.x+=dA*.4);tk.rotation.z-=dA*.5;
+ const out=kgh*f*(model==25&&size_>=5?.9:1);kg+=out/3600*dt*60;mtr+=mpm/60*dt*60;// sped-up demo clock x60
+ const pr=Math.min(1,kg/cap);fill.scale.set(1+pr*2,1,1+pr*2);
+ if(kg>=cap){kg=0;pk++;full++;fill.scale.set(1,1,1)}
+ const x0=((now/1000*f*.8)%1);
+ const bad=brkOn;strands.forEach((m,i)=>m.material.color.set(bad&&i==1?0xef5b4c:0x1fb99a));
+ eye.material.color.set(bad?0xef5b4c:0x1fb99a);lamp.material.color.set(bad?0xef5b4c:run?0x1fb99a:0xf08a3c);
+ th+=(tth-th)*.1;ph+=(tph-ph)*.1;rd+=(trd-rd)*.1;if(!dr&&!reduce)tth+=.0005;
+ cam.position.set(Math.sin(th)*Math.sin(ph)*rd-1,Math.cos(ph)*rd,Math.cos(th)*Math.sin(ph)*rd);cam.lookAt(-1.5,1.4,0);
+ const stage=bad?'Strand break':!run?'Paused':'Running';
+ st.forEach(s=>{tc.set(s[1],s[2],0).project(cam);s.e.style.left=(tc.x*.5+.5)*innerWidth+'px';s.e.style.top=(-tc.y*.5+.5)*innerHeight+'px';s.e.className='tag'+(bad&&s[0]=='Strand flyer'?' bad':f>.05&&!bad?' on':'')});
+ R.render(S,cam);
+ if(now-tick_>200){tick_=now;$('k1').textContent=out.toFixed(1);$('k2').textContent=mtr.toFixed(0);$('k3').textContent=full;$('k4').textContent=breaks;
+  $('prog').style.width=pr*100+'%';$('pk').textContent='P-'+String(pk).padStart(4,'0');
+  $('state').textContent=bad?'Stopped: strand break':run?'Running':'Paused';$('state').style.color=bad?'var(--bad)':run?'var(--teal)':'var(--amb)';
+  $('stn').textContent=bad?'Strand flyer':['Strand flyer','Rope flyer','Take-up'][Math.floor((now/2000)%3)];
+  $('r1').textContent=(rpm*2).toFixed(0)+' RPM';$('r2').textContent=rpm.toFixed(0)+' RPM';$('tpm').textContent=f>.02?tpm.toFixed(0):'0';
+  $('kw').textContent=(f>.02?(model==26?7.5:5)*(.35+.65*f):0).toFixed(1)+' kW';}
+}
+brk.addEventListener('click',()=>{if(brk_on())breaks++});function brk_on(){return $('brk').textContent=='Reset strand'}
+requestAnimationFrame(loop);
+</script></body></html>
